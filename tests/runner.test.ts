@@ -1,3 +1,4 @@
+import { createServer as createHttpServer } from 'node:http';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, symlink, rm } from 'node:fs/promises';
@@ -250,6 +251,13 @@ test('the verification URL accepts shell-style port placeholders and rejects an 
     const runtime = new LocalBrowserRuntime(task('http://127.0.0.1:$PORT/index.html', 'python3 -m http.server $PORT --bind 127.0.0.1'), new AbortController().signal, () => {});
     try { await runtime.start(); assert.match(runtime.url, /^http:\/\/127\.0\.0\.1:\d+\/index\.html$/); } finally { await runtime.stop(); }
     await assert.rejects(new LocalBrowserRuntime(task('bukan url'), new AbortController().signal, () => {}).start(), LocalProjectRuntimeError);
+    // An engineer wrote the default port of some other application that is already running: QA must get the started server, not that one.
+    const other = createHttpServer((_request, response) => response.end('aplikasi lain')).listen(0, '127.0.0.1');
+    await new Promise(resolve => other.once('listening', resolve));
+    const taken = (other.address() as { port: number }).port;
+    const guessed = new LocalBrowserRuntime(task(`http://127.0.0.1:${taken}`, 'python3 -m http.server $PORT --bind 127.0.0.1'), new AbortController().signal, () => {});
+    try { await guessed.start(); assert.notEqual(new URL(guessed.url).port, String(taken)); assert.doesNotMatch(await (await fetch(guessed.url)).text(), /aplikasi lain/); }
+    finally { await guessed.stop(); other.close(); }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

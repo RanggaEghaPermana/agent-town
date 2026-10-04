@@ -17,6 +17,7 @@ const total = (items: UsageRecord[]) => ({
   output: items.reduce((sum, item) => sum + item.outputTokens, 0),
   index: items.reduce((sum, item) => sum + index(item), 0),
   minutes: items.reduce((sum, item) => sum + item.durationMs, 0) / 60000,
+  turns: items.reduce((sum, item) => sum + (item.turns || 0), 0),
 });
 
 for (const task of store.all().filter(item => item.mode === 'claude').slice(0, limit).reverse()) {
@@ -30,7 +31,7 @@ for (const task of store.all().filter(item => item.mode === 'claude').slice(0, l
     if (!own.length) continue;
     const sum = total(own), models = [...new Set(own.map(item => item.model.replace('claude-', '')))].join('+');
     const marks = [own.some(item => item.native) && 'bawaan', own.some(item => item.chrome) && 'browser', own.some(item => item.resumed) && `${own.filter(item => item.resumed).length} lanjut sesi`].filter(Boolean).join(', ');
-    console.log(`    ${agent.name.padEnd(8)} ${String(sum.calls).padStart(2)} panggilan · tercatat ${number(sum.counted).padStart(9)} · cache dibaca ${number(sum.cacheRead).padStart(11)} · indeks ${number(sum.index).padStart(9)} · ${models}${marks ? ` · ${marks}` : ''}`);
+    console.log(`    ${agent.name.padEnd(8)} ${String(sum.calls).padStart(2)} panggilan${sum.turns ? ` (${sum.turns} giliran)` : ''} · tercatat ${number(sum.counted).padStart(9)} · cache dibaca ${number(sum.cacheRead).padStart(11)} · indeks ${number(sum.index).padStart(9)} · ${models}${marks ? ` · ${marks}` : ''}`);
   }
 }
 console.log('\nIndeks = perkiraan bobot harga API (cache tulis 1,25 · cache baca 0,1 · output 5) untuk membandingkan tugas dengan model yang sama; bukan angka tagihan.');

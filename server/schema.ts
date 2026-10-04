@@ -26,7 +26,7 @@ export function schemaFor(role: RoleId, phase = 'work', needsBackend = false, ex
   if (local) extra.push('changedFiles');
   if (role === 'ceo') required.push('plan');
   if (role === 'pm') required.push(...extra);
-  if (role === 'qa') required.push(...(phase === 'test-plan' ? ['browserTests'] : phase === 'prepare' ? ['localVerification'] : phase === 'live' ? ['liveEvidence', 'findings'] : ['findings']));
+  if (role === 'qa') required.push(...(phase === 'test-plan' ? ['browserTests'] : phase === 'prepare' ? ['localVerification'] : phase === 'live' ? ['liveEvidence'] : ['findings']));
   const schema = object(Object.fromEntries([...new Set([...required, ...extra])].map(key => [key, OUTPUT_SCHEMA.properties[key]])), required);
   if (local && role === 'ceo') schema.properties.plan = { ...(OUTPUT_SCHEMA.properties.plan as Record<string, unknown>), required: ['kind', 'needsBackend', 'needsDesign', 'complexity', 'reason'] };
   if (role === 'qa' && existingTests?.length) {

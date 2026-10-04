@@ -234,7 +234,7 @@ export class Runner {
       const result = await (task.mode === 'demo' ? this.demoEngine : this.engine)({ role, task, context, signal: controller.signal, routing, phase, chrome, persist, images: [...attached, ...(images || [])], onOutput: text => { chunk = (chunk + text).slice(-24000); if (!timer) timer = setTimeout(flush, 800); } });
       if (timer) clearTimeout(timer); flush(); controller.signal.throwIfAborted();
       task.inputTokens += result.inputTokens; task.outputTokens += result.outputTokens;
-      task.usage ||= []; task.usage.push({ role, phase, ...routing, inputTokens: result.inputTokens, outputTokens: result.outputTokens, cacheReadTokens: result.cacheReadTokens || 0, cacheWriteTokens: result.cacheWriteTokens || 0, durationMs: Date.now() - start, retry: task.retry, status: 'complete', measured: true, ...(task.nativeRoles?.includes(role) ? { native: true } : {}), ...(chrome || phase === 'live' ? { chrome: true } : {}), ...(result.resumed ? { resumed: true } : {}) }); recorded = true;
+      task.usage ||= []; task.usage.push({ role, phase, ...routing, inputTokens: result.inputTokens, outputTokens: result.outputTokens, cacheReadTokens: result.cacheReadTokens || 0, cacheWriteTokens: result.cacheWriteTokens || 0, durationMs: Date.now() - start, retry: task.retry, status: 'complete', measured: true, ...(task.nativeRoles?.includes(role) ? { native: true } : {}), ...(chrome || phase === 'live' ? { chrome: true } : {}), ...(result.resumed ? { resumed: true } : {}), ...(result.turns ? { turns: result.turns } : {}) }); recorded = true;
       this.changed(task);
       const output = validateOutput(result.output);
       if (output.needsBrowser && !chrome && task.access === 'local' && isEngineer(role)) {

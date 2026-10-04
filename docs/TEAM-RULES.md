@@ -51,12 +51,18 @@ Browser Chrome dipasang ke engineer hanya saat pekerjaannya memang ada di situs 
 
 ## Efisiensi tanpa mengurangi verifikasi
 
-- **Alat per peran.** Definisi alat dibaca ulang di setiap langkah panggilan. Prelude, Stanza dan Coda hanya memegang alat baca dan terminal (Prelude juga web); hanya engineer yang memegang alat tulis. Alat Chrome yang tidak dipakai kantor dibuang. Terukur: awalan panggilan Coda turun dari sekitar 17.300 ke 12.700 token per langkah.
+- **Alat per peran.** Definisi alat dibaca ulang di setiap langkah panggilan (terminal saja ±3.900 token, alat Chrome ±6.400). Prelude memegang alat baca, terminal dan web; Stanza dan Coda saat uji langsung hanya membaca (Read, Glob, Grep) tanpa terminal; hanya engineer yang memegang alat tulis. Alat Chrome yang tidak dipakai kantor dibuang, termasuk `find` dan `get_page_text` (yang terakhir mengembalikan teks tersembunyi).
 - **Panggilan yang tidak menambah hasil dilewati.** Untuk pekerjaan kecil dan jelas tanpa backend maupun desain, Prelude menulis kriterianya sendiri dan Stanza dilewati. Engineer yang membangun menyerahkan cara menjalankan aplikasinya (`localVerification` jenis live), sehingga panggilan persiapan QA dilewati; tes terminal tetap ditulis QA.
 - **Kriteria seperlunya.** Hanya yang diminta brief; setiap kriteria dibayar dengan pengujian browser dan bisa memicu perubahan kode.
-- **Browser hemat giliran.** Satu skenario dijalankan dalam satu `browser_batch`, hasil dikonfirmasi dengan satu ekspresi JavaScript, dan uji ulang menerima catatan langkah dari uji sebelumnya.
+- **Browser hemat giliran.** Urutan uji Coda: cek tab, satu batch persiapan (buka URL, segarkan cache, buka lagi, screenshot kecil, daftar kontrol), satu batch per skenario, lalu tutup tab bersama hasil akhir. Skenario pada halaman yang sama digabung dalam satu batch.
+- **Klik harus dikalibrasi.** Di tab latar belakang, klik lewat `ref` dan tombol keyboard diam-diam tidak berefek sampai ada screenshot dari halaman yang sedang dimuat. Karena itu setelah setiap navigasi diambil satu screenshot kecil, kolom diisi dengan `form_input`, dan hasil dibaca setelah jeda 2 detik (timer halaman latar belakang melambat). Tanpa aturan ini Coda membuang 3 giliran tiap uji untuk mendiagnosis form yang kosong.
+- **Aksi pengguna sungguhan.** Lintasan pertama setiap alur memakai isian dan klik nyata; skrip JavaScript hanya untuk membaca keadaan, menyegarkan cache, membersihkan data uji, dan mengulang variasi masukan pada form yang sudah terbukti bekerja dengan aksi nyata.
+- **URL server yang dijalankan kantor.** Bila engineer menulis port lain yang sudah dipakai aplikasi lain, kantor memakai port server yang ia jalankan sendiri; Coda tidak pernah diarahkan ke aplikasi lain.
 - **Yang tidak boleh dikorbankan.** QA menyegarkan berkas ter-cache sebelum menguji, menilai dari yang benar-benar terlihat (teks tersembunyi bukan bukti), dan memeriksa error konsol setelah tiap alur. Aturan ini menambah waktu tiap uji, dan dipertahankan karena tanpa itu halaman rusak pernah diloloskan.
 - **Keluaran ringkas.** Tulisan agent adalah bagian paling lambat dan mahal: tanpa narasi di antara pemanggilan alat, ringkasan satu kalimat, laporan sependek yang dibutuhkan peran berikutnya.
+- **Jejak langkah.** Tiap panggilan di Akses laptop menulis `trace.jsonl` di folder laporan tugas: alat yang dipakai tiap giliran, besar konteksnya, dan alasan alat ditolak. `npm run usage` menampilkan jumlah giliran per agent.
+
+Terukur 4 Okt 2026 di halaman uji, cache hangat, Sonnet medium (sebelum → sesudah): cek login 12.500–15.700 token, 60–90 detik, 9–10 giliran Coda → 7.600 token, 36 detik, 4–5 giliran; fitur kecil 15.990 token, 108 detik → 13.508 token, 55 detik; bug ditemukan, diperbaiki dan diuji ulang 36.311 token, 149 detik → 25.250–28.749 token, 87–140 detik. Panggilan pertama tiap peran setelah lebih dari satu jam menulis ulang awalannya (Prelude ±9.700, Coda ±17.000 token) dan itu tercatat penuh.
 
 ## Routing awal
 

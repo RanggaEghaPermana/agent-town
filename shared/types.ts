@@ -47,7 +47,7 @@ export interface Attachment { path: string; mediaType: 'image/png' | 'image/jpeg
 export interface UserNote { text: string; time: string; }
 export type Phase = 'work' | 'prepare' | 'test-plan' | 'review' | 'live';
 export interface QAFinding { role: 'frontend' | 'backend' | 'designer' | 'pm' | 'qa'; summary: string; reproduction: string; expected: string; actual: string; fixInBrowser?: boolean; }
-export interface UsageRecord { role: RoleId; phase: string; model: ModelId; effort: Effort; reason: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; durationMs: number; retry: number; status?: 'complete' | 'failed' | 'interrupted'; measured?: boolean; native?: boolean; chrome?: boolean; resumed?: boolean; }
+export interface UsageRecord { role: RoleId; phase: string; model: ModelId; effort: Effort; reason: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; durationMs: number; retry: number; status?: 'complete' | 'failed' | 'interrupted'; measured?: boolean; native?: boolean; chrome?: boolean; resumed?: boolean; turns?: number; }
 export interface Task {
   id: string;
   title: string;

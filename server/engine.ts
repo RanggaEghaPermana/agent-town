@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
+import { appendFile } from 'node:fs/promises';
+import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { ENGINEER_ROLES, type EngineerRole, type EngineHealth, type Phase, type RoleId, type RoutingDecision, type StageOutput, type Task } from '../shared/types.js';
 import { roleSkill } from './skills.js';
@@ -25,14 +27,15 @@ export interface EngineRequest {
   // 'question' keeps the CLI session only while it waits for the user; 'work' also keeps it for later repair rounds when resuming is cheap.
   persist?: 'question' | 'work';
 }
-export interface EngineResult {output: StageOutput; inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; resumed?: boolean;}
+export interface EngineResult {output: StageOutput; inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; resumed?: boolean; turns?: number;}
 export type AskEngine = (request: EngineRequest) => Promise<EngineResult>;
 // Tool definitions are re-read on every step of a call, so each role carries only what its work needs.
 // This also makes the read-only roles read-only in fact, not just by instruction.
 const READ_TOOLS = 'Bash,Read,Glob,Grep';
-export const localTools = (role: RoleId) => role === 'ceo' ? `${READ_TOOLS},WebFetch,WebSearch` : role === 'pm' || role === 'qa' ? READ_TOOLS : role === 'designer' ? 'Bash,Read,Write,Edit,Glob,Grep' : 'Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch';
+// Live QA works in the browser and the PM plans from reading, so neither carries the terminal's long definition on every step.
+export const localTools = (role: RoleId, phase?: Phase) => role === 'qa' && phase === 'live' ? 'Read,Glob,Grep' : role === 'pm' ? 'Read,Glob,Grep' : role === 'ceo' ? `${READ_TOOLS},WebFetch,WebSearch` : role === 'qa' ? READ_TOOLS : role === 'designer' ? 'Bash,Read,Write,Edit,Glob,Grep' : 'Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch';
 // Browser tools no office role uses; leaving them out saves about 2,300 tokens per step.
-const UNUSED_CHROME_TOOLS = ['gif_creator', 'shortcuts_execute', 'shortcuts_list', 'upload_image', 'file_upload', 'switch_browser', 'select_browser', 'list_connected_browsers'].map(name => `mcp__claude-in-chrome__${name}`).join(',');
+const UNUSED_CHROME_TOOLS = ['gif_creator', 'shortcuts_execute', 'shortcuts_list', 'upload_image', 'file_upload', 'switch_browser', 'select_browser', 'list_connected_browsers', 'find', 'get_page_text', 'tabs_create_mcp'].map(name => `mcp__claude-in-chrome__${name}`).join(',');
 
 // Live QA always drives the user's real Chrome; another role gets it only for work that happens on a website.
 export const usesChrome = (request: EngineRequest) => request.task.access === 'local' && (request.role === 'qa' && request.phase === 'live' || !!request.chrome);
@@ -42,7 +45,7 @@ export function claudeArgs(request: EngineRequest) {
   const local = request.task.access === 'local';
   // Safe mode skips unrelated customizations, not built-in tools or OS access.
   // Relevant project conventions are read explicitly by the assigned role.
-  const access = local ? ['--safe-mode', '--dangerously-skip-permissions', '--tools', localTools(request.role), '--settings', '{"sandbox":{"enabled":false}}'] : ['--safe-mode', '--setting-sources', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--tools', '', '--permission-mode', 'dontAsk'];
+  const access = local ? ['--safe-mode', '--dangerously-skip-permissions', '--tools', localTools(request.role, request.phase), '--settings', '{"sandbox":{"enabled":false}}'] : ['--safe-mode', '--setting-sources', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--tools', '', '--permission-mode', 'dontAsk'];
   const skill = local ? roleSkill(request.role) : '';
   // Experiment: selected roles keep Claude Code's built-in working method and receive the office rules on top of it.
   const native = local && !!request.task.nativeRoles?.includes(request.role);
@@ -75,6 +78,21 @@ function report(request: EngineRequest, event: any) {
     if (block.type === 'tool_result') request.onOutput(`\n[Tool ${block.is_error ? 'gagal' : 'selesai'}]\n`);
   }
 }
+// One line per model step in the task's report folder: which tools ran and how large the step was.
+// This is what `npm run usage` cannot show: where a call's steps actually went.
+const isStep = (event: any) => event.type === 'stream_event' && event.event?.type === 'message_start';
+function trace(request: EngineRequest, event: any) {
+  if (request.task.access !== 'local' || !request.task.workspace) return;
+  const file = path.join(request.task.workspace, 'trace.jsonl');
+  // A refused tool call costs a whole extra step, so its reason is worth keeping.
+  if (event.type === 'user') for (const block of event.message?.content || []) if (block.type === 'tool_result' && block.is_error) void appendFile(file, JSON.stringify({time: new Date().toISOString(), role: request.role, phase: request.phase || 'work', error: JSON.stringify(block.content).slice(0, 500)}) + '\n').catch(() => {});
+  if (event.type !== 'assistant') return;
+  const usage = event.message?.usage || {}, blocks = event.message?.content || [];
+  const tools = blocks.filter((block: any) => block.type === 'tool_use').map((block: any) => ({name: String(block.name).replace('mcp__claude-in-chrome__', 'chrome:'), input: JSON.stringify(block.input ?? {}).slice(0, 1500)}));
+  const text = blocks.filter((block: any) => block.type === 'text').map((block: any) => block.text).join(' ').slice(0, 300);
+  if (!tools.length && !text) return;
+  void appendFile(file, JSON.stringify({time: new Date().toISOString(), role: request.role, phase: request.phase || 'work', context: (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0), tools, ...(text ? {text} : {})}) + '\n').catch(() => {});
+}
 function engineResult(result: Record<string, unknown> | undefined, stderr: string): EngineResult {
   if (!result || result.is_error) throw new Error(String(result?.result || stderr || 'Claude tidak mengirim hasil.'));
   let value = result.structured_output;
@@ -91,13 +109,13 @@ function userMessage(request: EngineRequest, images = request.images || [], lead
 }
 const askOnce: AskEngine = request => new Promise((resolve, reject) => {
   const child = spawnClaude(request);
-  let buffer = '', stderr = '', result: Record<string, unknown> | undefined, finished = false;
+  let buffer = '', stderr = '', result: Record<string, unknown> | undefined, finished = false, turns = 0;
   let terminationError: Error | undefined, forceKill: ReturnType<typeof setTimeout> | undefined;
   const kill = (signal: NodeJS.Signals) => killGroup(child, signal);
   const end = (error?: Error) => {
     if (finished) return; finished = true; clearTimeout(timer); clearTimeout(forceKill); request.signal.removeEventListener('abort', abort);
     if (error) return reject(error);
-    try { resolve(engineResult(result, stderr)); } catch (error) { reject(error); }
+    try { resolve({...engineResult(result, stderr), turns}); } catch (error) { reject(error); }
   };
   const terminate = (error: Error) => {
     if (finished || terminationError) return;
@@ -113,7 +131,8 @@ const askOnce: AskEngine = request => new Promise((resolve, reject) => {
     try {
       const event = JSON.parse(line);
       if (event.type === 'result') result = event;
-      report(request, event);
+      if (isStep(event)) turns++;
+      report(request, event); trace(request, event);
     } catch {}
   };
   child.stdout.on('data', chunk => {
@@ -147,7 +166,7 @@ const sessionSignature = (request: EngineRequest) => [request.routing.model, req
 class LiveSession {
   private child: ReturnType<typeof spawnClaude>;
   private buffer = ''; private stderr = ''; private sentImages = 0; private closed = false; private context?: number;
-  private turn?: LiveTurn; private idle?: ReturnType<typeof setTimeout>;
+  private turn?: LiveTurn; private idle?: ReturnType<typeof setTimeout>; private turns = 0;
   readonly signature: string;
   constructor(private key: string, request: EngineRequest) {
     this.signature = sessionSignature(request);
@@ -170,7 +189,7 @@ class LiveSession {
       const abort = () => this.fail(new Error('Pekerjaan dihentikan.'));
       const timer = setTimeout(() => this.fail(new Error(`Tahap Claude melewati batas waktu ${limit} menit; hasil belum terverifikasi.`)), limit * 60000);
       request.signal.addEventListener('abort', abort, {once: true});
-      this.turn = {request, resumed, resolve, reject, timer, abort};
+      this.turn = {request, resumed, resolve, reject, timer, abort}; this.turns = 0;
       const images = (request.images || []).slice(this.sentImages); this.sentImages += images.length;
       const lead = !resumed ? '' : `CONTINUE YOUR EARLIER SESSION ON THIS TASK. You keep everything you already read and did, so do not repeat that exploration; the updated context and your next instruction follow.${usesChrome(request) ? ' For the browser, call tabs_context_mcp with createIfEmpty=true: it returns your existing tab group when it is still open, so keep working in that tab.' : ''}\n\n`;
       this.child.stdin.write(userMessage(request, images, lead));
@@ -185,8 +204,9 @@ class LiveSession {
     if (!this.turn) return;
     let event: any;
     try { event = JSON.parse(line); } catch { return; }
-    report(this.turn.request, event);
-    if (event.type === 'stream_event' && event.event?.type === 'message_start') {
+    report(this.turn.request, event); trace(this.turn.request, event);
+    if (isStep(event)) {
+      this.turns++;
       const usage = event.event.message?.usage || {};
       this.context = (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0);
     }
@@ -198,7 +218,7 @@ class LiveSession {
       const waiting = result.output.questions.length > 0;
       const cheap = turn.request.persist === 'work' && this.context !== undefined && this.context <= RESUME_CONTEXT_LIMIT;
       if (waiting || cheap) { this.idle = setTimeout(() => this.close(), LIVE_IDLE_MS); this.idle.unref(); } else this.close(true);
-      turn.resolve({...result, resumed: turn.resumed});
+      turn.resolve({...result, resumed: turn.resumed, turns: this.turns});
     } catch (error) { this.close(); turn.reject(error as Error); }
   }
   private fail(error: Error) { const turn = this.settle(); this.close(); turn?.reject(error); }

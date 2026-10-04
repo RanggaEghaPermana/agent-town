@@ -74,6 +74,13 @@ export class LocalBrowserRuntime {
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('URL browser harus HTTP/HTTPS tanpa kredensial di URL.');
     this.url = url.href.replace(/\/$/, '');
     if (verification.serverCommand) {
+      // The host picks the port for this command. A loopback URL on another port that already answers before the
+      // command starts is some other application, so it must never become the page QA tests.
+      let own: string | undefined;
+      if (['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) && url.port !== String(port)) {
+        const candidate = new URL(url.href); candidate.port = String(port); own = candidate.href.replace(/\/$/, '');
+        if (await fetch(this.url, { signal: AbortSignal.timeout(1500) }).then(() => true, () => false)) { this.url = own; own = undefined; }
+      }
       const child = spawn('/bin/bash', ['-lc', verification.serverCommand], { cwd: this.task.projectPath, env: { ...process.env, PORT: String(port), AGENT_TOWN_PREVIEW_PORT: String(port) }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
       let exited = false, startupError = '';
       const closed = new Promise<void>(resolve => { child.on('close', () => { exited = true; resolve(); }); child.on('error', error => { startupError = error.message; }); });
@@ -84,7 +91,7 @@ export class LocalBrowserRuntime {
       while (Date.now() < deadline) {
         this.signal.throwIfAborted();
         if (exited) throw new LocalProjectRuntimeError(`Server project gagal mulai: ${startupError}`);
-        try { await fetch(this.url, { signal: AbortSignal.timeout(2000) }); this.task.previewPort = port; return this; } catch {}
+        for (const candidate of own ? [own, this.url] : [this.url]) try { await fetch(candidate, { signal: AbortSignal.timeout(2000) }); this.url = candidate; this.task.previewPort = port; return this; } catch {}
         await new Promise(resolve => setTimeout(resolve, 150));
       }
       throw new LocalProjectRuntimeError(`Server project belum tersedia setelah 60 detik. ${startupError}`);

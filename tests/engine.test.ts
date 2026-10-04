@@ -44,7 +44,9 @@ test('laptop CLI uses native tools in the actual project and reports tool activi
     assert.ok(browsing.includes('--chrome')); assert.match(browsing[browsing.indexOf('--system-prompt') + 1], /BROWSER ACCESS/);
     const plain = claudeArgs({ ...local, role: 'backend' });
     const tester = claudeArgs({ ...local, role: 'qa', phase: 'live' });
-    assert.equal(tester[tester.indexOf('--tools') + 1], 'Bash,Read,Glob,Grep'); assert.match(tester[tester.indexOf('--disallowedTools') + 1], /gif_creator/);
+    // Live QA and the PM read only; the terminal's definition would be re-read on every step for nothing.
+    assert.equal(tester[tester.indexOf('--tools') + 1], 'Read,Glob,Grep'); assert.match(tester[tester.indexOf('--disallowedTools') + 1], /gif_creator.*get_page_text/);
+    assert.equal(localTools('pm'), 'Read,Glob,Grep'); assert.equal(localTools('qa', 'prepare'), 'Bash,Read,Glob,Grep');
     assert.ok(!localTools('pm').includes('Edit') && !localTools('ceo').includes('Write') && localTools('frontend').includes('Edit'));
     assert.ok(!plain.includes('--disallowedTools'));
     assert.ok(!plain.includes('--chrome')); assert.match(plain[plain.indexOf('--system-prompt') + 1], /needsBrowser=true/);
