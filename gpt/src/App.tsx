@@ -109,7 +109,7 @@ export default function App() {
     <header className="topbar">
       <a className="brand" href="/" aria-label="Agent Town, kantor utama"><span className="brand-mark"><Knot size={25} /></span><span>agent<span className="brand-second">town</span><small>CHATGPT / OPENAI OFFICE</small></span></a>
       <div className="header-divider" /><span className="workspace-name"><span className="tiny-square" /> Kantor GPT <ChevronRight size={14} /><span className="local-badge">LOCAL</span></span>
-      <div className="header-right"><span className={`connection ${connected ? '' : 'offline'}`}><i />{connected ? 'Kantor terhubung' : 'Menghubungkan…'}</span><button className="header-button" onClick={() => setHistory(true)}><History size={17} /><span>Riwayat</span>{state.tasks.length > 0 && <b>{state.tasks.length}</b>}</button><button className="icon-button" aria-label="Pengaturan koneksi" onClick={() => setSettings(true)}><Settings2 size={19} /></button><span className="owner-avatar">R</span></div>
+      <div className="header-right"><span className={`connection ${connected ? '' : 'offline'}`}><i />{connected ? 'Kantor terhubung' : 'Menghubungkan…'}</span><button className="header-button" aria-label={`Riwayat ${state.tasks.length}`} title="Riwayat project" onClick={() => setHistory(true)}><History size={17} /><span>Riwayat</span>{state.tasks.length > 0 && <b>{state.tasks.length}</b>}</button><button className="icon-button" aria-label="Pengaturan koneksi" onClick={() => setSettings(true)}><Settings2 size={19} /></button><span className="owner-avatar">R</span></div>
     </header>
 
     <main className="main-layout">

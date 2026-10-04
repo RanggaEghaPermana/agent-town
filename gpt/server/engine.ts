@@ -133,7 +133,7 @@ class RoleSession {
             if (item.server === 'cua_repl' && request.task.workspace) void appendFile(path.join(request.task.workspace, 'browser-trace.jsonl'), JSON.stringify({ time: new Date().toISOString(), role: request.role, code: String(item.arguments?.code || '').slice(0, 2000), error: item.error ? JSON.stringify(item.error).slice(0, 500) : undefined, result: (item.result?.content || []).filter((block: any) => block.type === 'text').map((block: any) => String(block.text)).filter((text: string) => !text.startsWith('## Computer Use') && !text.startsWith('# Other Browser APIs')).join(' | ').slice(0, 1200) }) + '\n').catch(() => {});
             request.onToolDiagnostic?.({ server: item.server, tool: item.tool, arguments: item.arguments, error: item.error, content: item.result?.content?.filter((block: any) => block.type === 'text') });
             if (chromeBlocked) {
-              finish(new Error('Chrome menolak kontrol saat pengujian. Biasanya ekstensi lain (misalnya perekam layar) menyisipkan panelnya ke halaman: setel ekstensi itu ke "saat diklik" atau matikan, lalu gunakan Lanjutkan diagnosis. Hasil tetap belum terverifikasi; sesi dihentikan agar tidak menghabiskan kuota.'));
+              finish(new Error('Chrome menolak kontrol saat pengujian. Penyebab penolakan belum dipastikan. Pulihkan kontrol browser, lalu gunakan Lanjutkan diagnosis. Hasil tetap belum terverifikasi; sesi dihentikan agar tidak menghabiskan kuota.'));
               void this.close();
               return;
             }
