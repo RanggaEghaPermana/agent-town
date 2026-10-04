@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.agent-town/
+projects/
+test-results/
+.env
+*.log
+
+.agent-town-gpt/
+gpt-projects/
+
+# Screenshots, logs and other verification output
+output/
+*.sqlite
+*.sqlite-*
+
+# Old reference artwork and mockups (the office is 3D now); kept locally only
+public/office-reference.png
+assets/
+mockups/
+
+# Local editor/agent launch settings
+.claude/

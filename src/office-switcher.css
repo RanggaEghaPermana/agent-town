@@ -1,0 +1,8 @@
+.office-switcher{position:fixed;right:24px;bottom:18px;z-index:25;display:flex;padding:5px;gap:4px;border:1px solid #d1cfc5;border-radius:14px;background:#faf9f5;box-shadow:0 4px 22px #14141318;font-size:12px}
+.office-switcher button{display:flex;align-items:center;gap:7px;padding:8px 13px;border:0;border-radius:9px;background:transparent;color:#5e5d59;font-weight:600}
+.office-switcher button[aria-pressed=true]{background:#f0d9cc;color:#141413}.provider-symbol{font-size:18px;line-height:1}.claude-symbol{color:#d97757}.gpt-symbol{color:#5d5d5d}
+.office-switcher.gpt{background:#f4f4f4;border-color:transparent;border-radius:999px;box-shadow:none;font-family:'Inter',system-ui,sans-serif}.office-switcher.gpt button{border-radius:999px;color:#5d5d5d}.office-switcher.gpt button[aria-pressed=true]{background:#0d0d0d;color:#fff}.office-switcher.gpt button[aria-pressed=true] .gpt-symbol{color:#fff}
+.office-loading{display:grid;place-items:center;min-height:100svh;background:#fff;color:#5d5d5d}.office-switcher button:focus-visible{outline:3px solid #0d0d0d;outline-offset:2px}
+@media(max-width:600px){.office-switcher{right:12px;bottom:12px}.office-switcher button{padding:7px 10px}}
+@media(min-width:901px){.office-switcher{position:absolute;top:16px;bottom:auto;right:auto;left:50%;transform:translateX(-50%)}}
+@media(max-width:900px){body{padding-bottom:68px}}

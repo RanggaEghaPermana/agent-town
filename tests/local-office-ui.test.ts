@@ -1,0 +1,65 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { chromium } from 'playwright';
+import { fixtureOffice, eventually } from './helpers/office.js';
+import { mathProject, localEngine } from './helpers/local-project.js';
+
+test('office UI selects an actual folder, answers information, edits existing files and shows terminal evidence', { timeout: 90000 }, async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'agent-town-local-ui-'));
+  const project = await mathProject(root); const simulation = localEngine(); const office = await fixtureOffice(root, simulation.engine);
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.AGENT_TOWN_BROWSER || undefined });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  const output = path.resolve('output/local-access-ui'); await mkdir(output, { recursive: true });
+  try {
+    await page.goto(await office.app.listen({ host: '127.0.0.1', port: 0 }));
+    await page.getByText('Kantor terhubung', { exact: true }).waitFor();
+    assert.equal(await page.getByLabel('Cara menjalankan tugas').inputValue(), 'local');
+    await page.locator('.project-folder').click();
+    await page.getByRole('button', { name: 'existing-repo', exact: true }).waitFor();
+    await page.getByLabel('Lokasi folder kerja').fill('/agent-town-folder-does-not-exist');
+    await page.getByRole('button', { name: 'Buka', exact: true }).click();
+    await page.getByRole('alert').waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Gunakan folder ini' }).isDisabled(), true);
+    await page.getByLabel('Lokasi folder kerja').fill(root);
+    await page.getByRole('button', { name: 'Buka', exact: true }).click();
+    await page.getByRole('button', { name: 'existing-repo', exact: true }).click();
+    await page.getByRole('button', { name: 'Gunakan folder ini' }).click();
+    assert.equal(await page.locator('.project-folder').innerText(), project);
+    await page.reload(); await page.getByText('Kantor terhubung', { exact: true }).waitFor();
+    assert.equal(await page.locator('.project-folder').innerText(), project);
+    const send = async (prompt: string) => {
+      await page.getByLabel('Tugas untuk CEO').fill(prompt); await page.getByRole('button', { name: 'Kirim tugas', exact: true }).click();
+      await eventually(() => office.runner.tasks.some(task => task.prompt === prompt && task.status === 'done'));
+      return office.runner.tasks.find(task => task.prompt === prompt)!;
+    };
+    const answer = await send('Berikan daftar folder project ini');
+    await page.locator('.task-answer').waitFor();
+    assert.match(await page.locator('.task-answer').innerText(), /lib/);
+    assert.equal(answer.access, 'local'); assert.equal(simulation.calls.length, 1);
+    assert.equal(await page.locator('.verification-panel').count(), 0);
+    const edited = await send('Perbaiki fungsi double project ini');
+    await page.getByText('1/1 skenario terminal lulus.', { exact: false }).waitFor();
+    await page.locator('.evidence-case summary').click();
+    assert.match(await page.locator('.evidence-case').innerText(), /double verified/);
+    await page.getByRole('button', { name: /^File \d+/ }).click();
+    await page.getByRole('button', { name: new RegExp('lib/math.mjs') }).click();
+    assert.match(await page.locator('.source-view').innerText(), /n \* 2/);
+    const downloadWait = page.waitForEvent('download'); await page.getByRole('link', { name: 'Unduh file' }).click();
+    const download = await downloadWait;
+    assert.equal(download.suggestedFilename(), 'math.mjs'); assert.equal(await download.failure(), null);
+    await page.getByRole('button', { name: 'Tutup dialog' }).click();
+    assert.equal(edited.changedFiles![0].path, path.join(project, 'lib/math.mjs'));
+    assert.match(await readFile(path.join(project, 'README.md'), 'utf8'), /Existing/);
+    await page.screenshot({ path: path.join(output, 'existing-project-files.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('.project-folder').click(); await page.getByLabel('Lokasi folder kerja').waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+    await page.screenshot({ path: path.join(output, 'folder-picker-mobile.png') });
+    await page.keyboard.press('Escape'); assert.equal(await page.getByLabel('Lokasi folder kerja').count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); await office.app.close(); await rm(root, { recursive: true, force: true }); }
+});

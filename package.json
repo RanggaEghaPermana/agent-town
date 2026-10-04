@@ -1,0 +1,47 @@
+{
+  "name": "agent-town",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n server,gpt,office \"npm:dev:server\" \"npm:dev:gpt\" \"npm:dev:client\"",
+    "dev:server": "tsx watch server/index.ts",
+    "dev:client": "vite --host 127.0.0.1 --port 5178 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "start": "tsx scripts/start-offices.ts",
+    "usage": "tsx scripts/usage.ts",
+    "test": "npm run build && tsx --test --test-concurrency=1 tests/*.test.ts",
+    "dev:gpt": "tsx watch gpt/server/index.ts",
+    "start:claude": "tsx server/index.ts",
+    "usage:gpt": "tsx gpt/scripts/usage.ts",
+    "test:gpt": "npm run build && tsx --test --test-concurrency=1 gpt/tests/*.test.ts"
+  },
+  "dependencies": {
+    "@fastify/static": "^8.0.0",
+    "@fastify/websocket": "^11.0.0",
+    "ajv": "8.20.0",
+    "better-sqlite3": "^12.0.0",
+    "fastify": "^5.0.0",
+    "lucide-react": "^0.468.0",
+    "playwright": "1.63.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "0.186.0",
+    "@types/ws": "8.18.2",
+    "@vitejs/plugin-react": "^4.4.0",
+    "concurrently": "^9.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.0.0"
+  }
+}
